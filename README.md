@@ -43,7 +43,7 @@ If the AI call fails for any reason, it falls back to basic commit-list notes. A
 
 ```json
 ["semantic-release-ai-notes", {
-  "model": "claude-haiku-4-5-20251001",
+  "model": "claude-haiku-4-5",
   "brandFile": "brand.md",
   "style": "concise",
   "maxTurns": 15
@@ -52,7 +52,7 @@ If the AI call fails for any reason, it falls back to basic commit-list notes. A
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `model` | `claude-haiku-4-5-20251001` | Claude model to use |
+| `model` | `claude-haiku-4-5` | Claude model to use |
 | `brandFile` | `brand.md` | Path to a voice/tone guide (optional) |
 | `style` | `concise` | `"concise"` (bullet points) or `"detailed"` (short paragraphs) |
 | `maxTurns` | `15` | Max agent tool-use rounds (caps cost) |

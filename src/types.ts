@@ -1,5 +1,5 @@
 export interface PluginConfig {
-	/** Claude model to use (default: "claude-haiku-4-5-20251001") */
+	/** Claude model to use (default: "claude-haiku-4-5") */
 	model?: string;
 	/** Path to a voice/tone file relative to cwd, e.g. brand.md (default: "brand.md") */
 	brandFile?: string;

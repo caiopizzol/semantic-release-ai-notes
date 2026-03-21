@@ -22,7 +22,7 @@ export async function verifyConditions(
 		throw new SemanticReleaseError(
 			"Invalid model configuration.",
 			"EINVALIDMODEL",
-			"The 'model' option must be a string (e.g. 'claude-haiku-4-5-20251001').",
+			"The 'model' option must be a string (e.g. 'claude-haiku-4-5').",
 		);
 	}
 
