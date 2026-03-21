@@ -1,5 +1,6 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { GenerateNotesContext } from "../types.js";
+import { _resetCache } from "./generate-notes.js";
 
 function makeContext(
 	overrides: Partial<GenerateNotesContext> = {},
@@ -27,6 +28,10 @@ function makeContext(
 }
 
 describe("generateNotes", () => {
+	beforeEach(() => {
+		_resetCache();
+	});
+
 	test("returns agent result on success", async () => {
 		const mockNotes = "### What's New\n\n- **Cool feature** — does cool things";
 

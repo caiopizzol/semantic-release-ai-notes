@@ -4,12 +4,26 @@ import type { GenerateNotesContext, PluginConfig } from "../types.js";
 import { generateFallbackNotes } from "./fallback.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 
+// Cache the result — semantic-release calls generateNotes twice
+// (before and after @semantic-release/git's version commit)
+let cachedNotes: string | null = null;
+
+/** Reset cache — exposed for testing */
+export function _resetCache() {
+	cachedNotes = null;
+}
+
 export async function generateNotes(
 	pluginConfig: PluginConfig,
 	context: GenerateNotesContext,
 ): Promise<string> {
 	const { commits, lastRelease, nextRelease, logger } = context;
 	const cwd = context.cwd || process.cwd();
+
+	if (cachedNotes) {
+		logger.log("Returning cached AI release notes.");
+		return cachedNotes;
+	}
 
 	// Read brand/voice file if it exists
 	const brandFile = pluginConfig.brandFile ?? "brand.md";
@@ -56,7 +70,8 @@ export async function generateNotes(
 					const turns =
 						"num_turns" in message ? ` (${message.num_turns} turns)` : "";
 					logger.log(`AI release notes generated${turns}${cost}`);
-					return message.result;
+					cachedNotes = message.result;
+					return cachedNotes;
 				}
 
 				logger.warn(`Agent ended with: ${message.subtype}`);
