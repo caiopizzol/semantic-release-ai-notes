@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { GenerateNotesContext, PluginConfig } from "../types.js";
+import type { GenerateNotesContext } from "../types.js";
 
 function makeContext(
 	overrides: Partial<GenerateNotesContext> = {},

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { generateFallbackNotes } from "./fallback.js";
 import type { Commit, Release } from "../types.js";
+import { generateFallbackNotes } from "./fallback.js";
 
 const nextRelease: Release & { type: string } = {
 	version: "1.2.0",

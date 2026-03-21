@@ -5,8 +5,7 @@ export async function verifyConditions(
 	pluginConfig: PluginConfig,
 	context: VerifyConditionsContext,
 ): Promise<void> {
-	const apiKey =
-		context.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+	const apiKey = context.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY;
 
 	if (!apiKey) {
 		throw new SemanticReleaseError(
@@ -16,7 +15,10 @@ export async function verifyConditions(
 		);
 	}
 
-	if (pluginConfig.model !== undefined && typeof pluginConfig.model !== "string") {
+	if (
+		pluginConfig.model !== undefined &&
+		typeof pluginConfig.model !== "string"
+	) {
 		throw new SemanticReleaseError(
 			"Invalid model configuration.",
 			"EINVALIDMODEL",

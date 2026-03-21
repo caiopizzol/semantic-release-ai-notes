@@ -1,5 +1,5 @@
-import { verifyConditions } from "./lib/verify.js";
 import { generateNotes } from "./lib/generate-notes.js";
+import { verifyConditions } from "./lib/verify.js";
 
-export { verifyConditions, generateNotes };
 export type { PluginConfig } from "./types.js";
+export { generateNotes, verifyConditions };

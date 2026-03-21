@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { GenerateNotesContext, PluginConfig } from "../types.js";
 import { generateFallbackNotes } from "./fallback.js";
-import { SYSTEM_PROMPT, buildPrompt } from "./prompt.js";
+import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 
 export async function generateNotes(
 	pluginConfig: PluginConfig,
@@ -55,22 +55,16 @@ export async function generateNotes(
 							: "";
 					const turns =
 						"num_turns" in message ? ` (${message.num_turns} turns)` : "";
-					logger.log(
-						`AI release notes generated${turns}${cost}`,
-					);
+					logger.log(`AI release notes generated${turns}${cost}`);
 					return message.result;
 				}
 
-				logger.warn(
-					`Agent ended with: ${message.subtype}`,
-				);
+				logger.warn(`Agent ended with: ${message.subtype}`);
 				break;
 			}
 		}
 	} catch (error) {
-		logger.warn(
-			`AI notes generation failed: ${(error as Error).message}`,
-		);
+		logger.warn(`AI notes generation failed: ${(error as Error).message}`);
 	}
 
 	// Fallback — never block a release

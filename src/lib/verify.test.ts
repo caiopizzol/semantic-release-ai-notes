@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import type { VerifyConditionsContext } from "../types.js";
 import { verifyConditions } from "./verify.js";
-import type { PluginConfig, VerifyConditionsContext } from "../types.js";
 
 function makeContext(
 	env: Record<string, string | undefined> = {},
@@ -21,9 +21,9 @@ describe("verifyConditions", () => {
 		delete process.env.ANTHROPIC_API_KEY;
 
 		try {
-			await expect(
-				verifyConditions({}, makeContext({})),
-			).rejects.toThrow("ANTHROPIC_API_KEY");
+			await expect(verifyConditions({}, makeContext({}))).rejects.toThrow(
+				"ANTHROPIC_API_KEY",
+			);
 		} finally {
 			if (original) process.env.ANTHROPIC_API_KEY = original;
 		}
