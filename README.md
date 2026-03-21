@@ -1,5 +1,7 @@
 # semantic-release-ai-notes
 
+[![npm version](https://img.shields.io/npm/v/semantic-release-ai-notes.svg)](https://www.npmjs.com/package/semantic-release-ai-notes)
+
 AI-powered release notes for [semantic-release](https://github.com/semantic-release/semantic-release), using Claude.
 
 Instead of reformatting commit messages, this plugin gives a Claude agent read-only access to your codebase. It explores the actual code changes, understands what was done, and writes release notes a human would write.
