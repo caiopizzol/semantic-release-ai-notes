@@ -1,6 +1,6 @@
 {
 	"name": "semantic-release-ai-notes",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"description": "AI-powered release notes for semantic-release",
 	"type": "module",
 	"main": "dist/index.js",
