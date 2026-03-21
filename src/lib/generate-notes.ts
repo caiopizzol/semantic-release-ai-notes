@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { GenerateNotesContext, PluginConfig } from "../types.js";
@@ -13,23 +14,43 @@ export function _resetCache() {
 	cachedNotes = null;
 }
 
+/**
+ * Resolve the git repository root. In monorepos, semantic-release's cwd is the
+ * package directory, but git diff paths and brand files are relative to the repo root.
+ */
+export function getRepoRoot(cwd: string): string {
+	try {
+		return execSync("git rev-parse --show-toplevel", {
+			cwd,
+			encoding: "utf-8",
+		}).trim();
+	} catch {
+		return cwd;
+	}
+}
+
 export async function generateNotes(
 	pluginConfig: PluginConfig,
 	context: GenerateNotesContext,
 ): Promise<string> {
 	const { commits, lastRelease, nextRelease, logger } = context;
 	const cwd = context.cwd || process.cwd();
+	const repoRoot = getRepoRoot(cwd);
 
 	if (cachedNotes) {
 		logger.log("Returning cached AI release notes.");
 		return cachedNotes;
 	}
 
-	// Read brand/voice file if it exists
+	// Read brand/voice file if it exists — resolve from repo root so monorepo
+	// packages can find a root-level brand.md
 	const brandFile = pluginConfig.brandFile ?? "brand.md";
 	let brandContent: string | null = null;
 	try {
-		brandContent = await fs.readFile(path.resolve(cwd, brandFile), "utf-8");
+		brandContent = await fs.readFile(
+			path.resolve(repoRoot, brandFile),
+			"utf-8",
+		);
 	} catch {
 		// No brand file — that's fine
 	}
@@ -51,7 +72,7 @@ export async function generateNotes(
 			options: {
 				allowedTools: ["Read", "Glob", "Grep", "Bash"],
 				disallowedTools: ["Write", "Edit", "NotebookEdit"],
-				cwd,
+				cwd: repoRoot,
 				model: pluginConfig.model || "claude-haiku-4-5",
 				maxTurns: pluginConfig.maxTurns || 15,
 				permissionMode: "bypassPermissions",
