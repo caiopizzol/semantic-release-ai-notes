@@ -1,7 +1,7 @@
 {
 	"name": "semantic-release-ai-notes",
-	"version": "0.0.0-development",
-	"description": "AI-powered release notes for semantic-release, using Claude",
+	"version": "0.0.0",
+	"description": "AI-powered release notes for semantic-release",
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -9,14 +9,14 @@
 		"node": ">=18"
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "./node_modules/.bin/tsc",
 		"clean": "rm -rf dist",
 		"prebuild": "rm -rf dist",
 		"prepublishOnly": "npm run build",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "./node_modules/.bin/tsc --noEmit",
 		"test": "bun test",
-		"lint": "biome check .",
-		"lint:fix": "biome check --write .",
+		"lint": "./node_modules/.bin/biome check .",
+		"lint:fix": "./node_modules/.bin/biome check --write .",
 		"validate": "bun run lint && bun run typecheck && bun run build && bun test"
 	},
 	"keywords": [

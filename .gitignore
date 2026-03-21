@@ -1,4 +1,5 @@
 node_modules/
 dist/
-*.tgz
+dev/
 .DS_Store
+.env
