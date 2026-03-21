@@ -2,7 +2,7 @@
 	"branches": ["main"],
 	"plugins": [
 		"@semantic-release/commit-analyzer",
-		["semantic-release-ai-notes", { "style": "concise" }],
+		["semantic-release-ai-notes", { "model": "claude-sonnet-4-6-20250514", "style": "concise" }],
 		["@semantic-release/npm", { "access": "public" }],
 		["@semantic-release/git", {
 			"assets": ["package.json"],

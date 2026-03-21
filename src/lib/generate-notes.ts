@@ -38,7 +38,7 @@ export async function generateNotes(
 				allowedTools: ["Read", "Glob", "Grep", "Bash"],
 				disallowedTools: ["Write", "Edit", "NotebookEdit"],
 				cwd,
-				model: pluginConfig.model || "claude-sonnet-4-20250514",
+				model: pluginConfig.model || "claude-haiku-4-5-20251001",
 				maxTurns: pluginConfig.maxTurns || 15,
 				permissionMode: "bypassPermissions",
 				allowDangerouslySkipPermissions: true,
