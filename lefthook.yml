@@ -2,6 +2,6 @@ pre-commit:
   parallel: true
   commands:
     lint:
-      run: bun run lint
+      run: pnpm lint
     typecheck:
-      run: bun run typecheck
+      run: pnpm typecheck
