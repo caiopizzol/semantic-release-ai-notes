@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!dist/action/
 dev/
 .DS_Store
 .env

@@ -1,0 +1,57 @@
+name: 'AI Release Notes'
+description: 'Generate AI-powered release notes for any project using Claude'
+branding:
+  icon: 'file-text'
+  color: 'orange'
+
+inputs:
+  anthropic-api-key:
+    description: 'Anthropic API key'
+    required: true
+  model:
+    description: 'Claude model to use'
+    default: 'claude-haiku-4-5'
+  style:
+    description: 'Notes style: concise or detailed'
+    default: 'concise'
+  max-turns:
+    description: 'Maximum agent turns (controls cost)'
+    default: '15'
+  brand-file:
+    description: 'Path to voice/tone guide relative to repo root'
+    default: 'brand.md'
+  previous-tag:
+    description: 'Previous release tag (auto-detected from git if not set)'
+    default: ''
+  update-release:
+    description: 'Update the GitHub release for the current tag with generated notes'
+    default: 'false'
+  github-token:
+    description: 'GitHub token (required if update-release is true)'
+    default: ''
+
+outputs:
+  notes:
+    description: 'Generated release notes in markdown'
+    value: ${{ steps.generate.outputs.notes }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Claude Code
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code@latest
+
+    - name: Generate release notes
+      id: generate
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_STYLE: ${{ inputs.style }}
+        INPUT_MAX_TURNS: ${{ inputs.max-turns }}
+        INPUT_BRAND_FILE: ${{ inputs.brand-file }}
+        INPUT_PREVIOUS_TAG: ${{ inputs.previous-tag }}
+        INPUT_UPDATE_RELEASE: ${{ inputs.update-release }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "${{ github.action_path }}/dist/action/index.mjs"

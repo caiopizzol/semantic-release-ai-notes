@@ -10,13 +10,15 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"prebuild": "rm -rf dist",
+		"build:action": "bun build action/index.ts --outfile dist/action/index.mjs --target node",
+		"build:all": "pnpm build && pnpm build:action",
+		"prebuild": "rm -rf dist/lib dist/index.js dist/index.d.ts dist/types.js dist/types.d.ts",
 		"prepublishOnly": "pnpm build",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
-		"validate": "pnpm lint && pnpm typecheck && pnpm build && bun test"
+		"validate": "pnpm lint && pnpm typecheck && pnpm build:all && bun test"
 	},
 	"keywords": [
 		"semantic-release",
