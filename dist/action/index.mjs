@@ -72,6 +72,9 @@ function isReleaseNoteSection(value) {
   }
   return isReleaseNoteHeading(value.heading) && Array.isArray(value.items) && value.items.length > 0 && value.items.every(isReleaseNoteItem);
 }
+function normalizeNoteText(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
 function validateReleaseNotes(value) {
   if (!isRecord(value) || !hasOnlyKeys(value, ["sections"])) {
     return false;
@@ -80,7 +83,7 @@ function validateReleaseNotes(value) {
 }
 function renderNotes(notes) {
   return notes.sections.map((section) => {
-    const items = section.items.map((item) => `- **${item.title.trim()}** — ${item.description.trim()}`).join(`
+    const items = section.items.map((item) => `- **${normalizeNoteText(item.title)}** — ${normalizeNoteText(item.description)}`).join(`
 `);
     return `### ${section.heading}
 
@@ -98,7 +101,7 @@ You have access to the codebase via tools. Use them to understand what actually 
 Output requirements:
 - Output ONLY structured data matching the configured JSON schema. No preamble, no explanation, no wrapping code fences.
 - The root object has a sections array with at least one section.
-- Each section heading must be one of: What's New, Improvements, Fixes, Breaking Changes.
+- Each section heading must be one of: ${RELEASE_NOTE_HEADINGS.join(", ")}.
 - Each section has at least one item with a non-empty title and non-empty description.
 
 Content rules:

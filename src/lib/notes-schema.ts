@@ -100,6 +100,10 @@ function isReleaseNoteSection(value: unknown): value is ReleaseNoteSection {
 	);
 }
 
+function normalizeNoteText(value: string): string {
+	return value.trim().replace(/\s+/g, " ");
+}
+
 export function validateReleaseNotes(value: unknown): value is ReleaseNotes {
 	if (!isRecord(value) || !hasOnlyKeys(value, ["sections"])) {
 		return false;
@@ -117,7 +121,8 @@ export function renderNotes(notes: ReleaseNotes): string {
 		.map((section) => {
 			const items = section.items
 				.map(
-					(item) => `- **${item.title.trim()}** — ${item.description.trim()}`,
+					(item) =>
+						`- **${normalizeNoteText(item.title)}** — ${normalizeNoteText(item.description)}`,
 				)
 				.join("\n");
 

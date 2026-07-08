@@ -1,4 +1,5 @@
 import type { Commit, PluginConfig, Release } from "../types.js";
+import { RELEASE_NOTE_HEADINGS } from "./notes-schema.js";
 
 export const SYSTEM_PROMPT = `You are a release notes writer. You generate clean, reader-friendly release-note data for software projects.
 
@@ -7,7 +8,7 @@ You have access to the codebase via tools. Use them to understand what actually 
 Output requirements:
 - Output ONLY structured data matching the configured JSON schema. No preamble, no explanation, no wrapping code fences.
 - The root object has a sections array with at least one section.
-- Each section heading must be one of: What's New, Improvements, Fixes, Breaking Changes.
+- Each section heading must be one of: ${RELEASE_NOTE_HEADINGS.join(", ")}.
 - Each section has at least one item with a non-empty title and non-empty description.
 
 Content rules:

@@ -3,7 +3,7 @@ export interface PluginConfig {
 	model?: string;
 	/** Path to a voice/tone file relative to cwd, e.g. brand.md (default: "brand.md") */
 	brandFile?: string;
-	/** Notes style: "concise" (one line per change) or "detailed" (short paragraphs) */
+	/** Notes style: "concise" (one line per change) or "detailed" (longer, multi-sentence descriptions) */
 	style?: "concise" | "detailed";
 	/** Maximum agent turns to prevent runaway cost (default: 15) */
 	maxTurns?: number;
