@@ -3,6 +3,12 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import {
+	releaseNotesSchema,
+	renderNotes,
+	validateReleaseNotes,
+} from "../src/lib/notes-schema.js";
 import { SYSTEM_PROMPT } from "../src/lib/prompt.js";
 
 // --- GitHub Actions helpers ---
@@ -107,16 +113,70 @@ function buildPrompt(
 	if (style === "concise") {
 		parts.push(
 			"\n## Style\n",
-			"Keep notes brief — one sentence per change, no paragraphs. Bullet points only.",
+			"Keep descriptions brief — one sentence per change.",
 		);
 	} else {
 		parts.push(
 			"\n## Style\n",
-			"You may include a short paragraph (2-3 sentences) for significant features. Use bullet points for smaller changes.",
+			"You may use 2-3 sentences in the description for significant features. Keep smaller changes to one sentence.",
 		);
 	}
 
 	return parts.join("\n");
+}
+
+export function buildClaudeArgs({
+	model,
+	maxTurns,
+	sysFile,
+	prompt,
+}: {
+	model: string;
+	maxTurns: string;
+	sysFile: string;
+	prompt: string;
+}): string[] {
+	return [
+		"-p",
+		"--bare",
+		"--json-schema",
+		JSON.stringify(releaseNotesSchema),
+		"--model",
+		model,
+		"--max-turns",
+		maxTurns,
+		"--allowedTools",
+		"Read,Glob,Grep,Bash",
+		"--disallowedTools",
+		"Write,Edit,NotebookEdit",
+		"--append-system-prompt-file",
+		sysFile,
+		"--dangerously-skip-permissions",
+		prompt,
+	];
+}
+
+export function renderClaudeStructuredOutput(stdout: string): string {
+	const trimmed = stdout.trim();
+	if (!trimmed) throw new Error("Empty response from Claude");
+
+	const parsed: unknown = JSON.parse(trimmed);
+	if (!validateReleaseNotes(parsed)) {
+		throw new Error("Claude returned invalid structured release notes");
+	}
+
+	return renderNotes(parsed);
+}
+
+export function renderClaudeStructuredOutputOrFallback(
+	stdout: string,
+	commitLog: string,
+): string {
+	try {
+		return renderClaudeStructuredOutput(stdout);
+	} catch {
+		return commitLog;
+	}
 }
 
 // --- Main ---
@@ -162,22 +222,7 @@ async function main(): Promise<void> {
 	try {
 		const result = spawnSync(
 			"claude",
-			[
-				"-p",
-				"--bare",
-				"--model",
-				model,
-				"--max-turns",
-				maxTurns,
-				"--allowedTools",
-				"Read,Glob,Grep,Bash",
-				"--disallowedTools",
-				"Write,Edit,NotebookEdit",
-				"--append-system-prompt-file",
-				sysFile,
-				"--dangerously-skip-permissions",
-				prompt,
-			],
+			buildClaudeArgs({ model, maxTurns, sysFile, prompt }),
 			{
 				encoding: "utf-8",
 				cwd: repoRoot,
@@ -190,8 +235,7 @@ async function main(): Promise<void> {
 			throw new Error(result.stderr || `Exit code ${result.status}`);
 		}
 
-		notes = result.stdout.trim();
-		if (!notes) throw new Error("Empty response from Claude");
+		notes = renderClaudeStructuredOutput(result.stdout);
 
 		console.log("AI release notes generated successfully.");
 	} catch (err) {
@@ -228,7 +272,12 @@ async function main(): Promise<void> {
 	}
 }
 
-main().catch((err) => {
-	console.log(`::error::${(err as Error).message}`);
-	process.exit(1);
-});
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+	main().catch((err) => {
+		console.log(`::error::${(err as Error).message}`);
+		process.exit(1);
+	});
+}

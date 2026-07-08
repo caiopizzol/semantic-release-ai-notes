@@ -3,6 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { GenerateNotesContext, PluginConfig } from "../types.js";
 import { generateFallbackNotes } from "./fallback.js";
+import {
+	releaseNotesSchema,
+	renderNotes,
+	validateReleaseNotes,
+} from "./notes-schema.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 
 // Cache the result — semantic-release calls generateNotes twice
@@ -78,12 +83,21 @@ export async function generateNotes(
 				permissionMode: "bypassPermissions",
 				allowDangerouslySkipPermissions: true,
 				systemPrompt: SYSTEM_PROMPT,
+				outputFormat: {
+					type: "json_schema",
+					schema: releaseNotesSchema,
+				},
 			},
 		});
 
 		for await (const message of agentQuery) {
 			if (message.type === "result") {
-				if (message.subtype === "success" && message.result) {
+				if (message.subtype === "success") {
+					if (!validateReleaseNotes(message.structured_output)) {
+						logger.warn("Agent returned invalid structured release notes.");
+						break;
+					}
+
 					const cost =
 						"total_cost_usd" in message
 							? ` ($${(message.total_cost_usd as number).toFixed(4)})`
@@ -91,7 +105,7 @@ export async function generateNotes(
 					const turns =
 						"num_turns" in message ? ` (${message.num_turns} turns)` : "";
 					logger.log(`AI release notes generated${turns}${cost}`);
-					cachedNotes = message.result;
+					cachedNotes = renderNotes(message.structured_output);
 					return cachedNotes;
 				}
 

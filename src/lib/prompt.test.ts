@@ -37,6 +37,11 @@ describe("SYSTEM_PROMPT", () => {
 		expect(SYSTEM_PROMPT).toContain("No preamble");
 	});
 
+	test("instructs structured data output", () => {
+		expect(SYSTEM_PROMPT).toContain("structured data");
+		expect(SYSTEM_PROMPT).toContain("configured JSON schema");
+	});
+
 	test("instructs no version heading", () => {
 		expect(SYSTEM_PROMPT).toContain("Do NOT include the version number");
 	});
@@ -133,7 +138,7 @@ describe("buildPrompt", () => {
 		const result = buildPrompt(commits, lastRelease, nextRelease, null, {
 			style: "detailed",
 		});
-		expect(result).toContain("short paragraph");
+		expect(result).toContain("2-3 sentences");
 	});
 
 	test("handles first release (no lastRelease version)", () => {

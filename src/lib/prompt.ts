@@ -1,17 +1,23 @@
 import type { Commit, PluginConfig, Release } from "../types.js";
 
-export const SYSTEM_PROMPT = `You are a release notes writer. You generate clean, reader-friendly release notes for software projects.
+export const SYSTEM_PROMPT = `You are a release notes writer. You generate clean, reader-friendly release-note data for software projects.
 
 You have access to the codebase via tools. Use them to understand what actually changed — don't just rephrase commit messages.
 
-Rules:
-- Output ONLY the release notes markdown. No preamble, no explanation, no wrapping code fences.
+Output requirements:
+- Output ONLY structured data matching the configured JSON schema. No preamble, no explanation, no wrapping code fences.
+- The root object has a sections array with at least one section.
+- Each section heading must be one of: What's New, Improvements, Fixes, Breaking Changes.
+- Each section has at least one item with a non-empty title and non-empty description.
+
+Content rules:
 - Focus on what matters to users of this software.
-- Group changes by theme (What's New, Fixes, Improvements, Breaking Changes) as appropriate. Use ### headings.
-- Use bold for feature names, em dash for descriptions.
+- Group changes by theme using the schema headings as appropriate.
+- Use item titles for feature or change names.
+- Use item descriptions for the user-facing explanation.
 - Write in present tense, active voice.
 - Be specific about what changed, not vague.
-- Do NOT include the version number as a heading — semantic-release adds that.
+- Do NOT include the version number as a heading or item title.
 - Do NOT include commit hashes or links.
 - If a voice/tone guide is provided, match its tone and style.
 - Skip trivial changes (version bumps, CI config tweaks) unless they're the only changes.`;
@@ -72,12 +78,12 @@ export function buildPrompt(
 	if (style === "concise") {
 		parts.push(
 			`\n## Style\n`,
-			`Keep notes brief — one sentence per change, no paragraphs. Bullet points only.`,
+			`Keep descriptions brief — one sentence per change.`,
 		);
 	} else {
 		parts.push(
 			`\n## Style\n`,
-			`You may include a short paragraph (2-3 sentences) for significant features. Use bullet points for smaller changes.`,
+			`You may use 2-3 sentences in the description for significant features. Keep smaller changes to one sentence.`,
 		);
 	}
 

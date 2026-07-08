@@ -4,20 +4,111 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+// src/lib/notes-schema.ts
+var RELEASE_NOTE_HEADINGS = [
+  "What's New",
+  "Improvements",
+  "Fixes",
+  "Breaking Changes"
+];
+var releaseNotesSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sections"],
+  properties: {
+    sections: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["heading", "items"],
+        properties: {
+          heading: {
+            type: "string",
+            enum: RELEASE_NOTE_HEADINGS
+          },
+          items: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["title", "description"],
+              properties: {
+                title: { type: "string", minLength: 1 },
+                description: { type: "string", minLength: 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function hasOnlyKeys(value, keys) {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function isReleaseNoteHeading(value) {
+  return typeof value === "string" && RELEASE_NOTE_HEADINGS.includes(value);
+}
+function isReleaseNoteItem(value) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["title", "description"])) {
+    return false;
+  }
+  return isNonEmptyString(value.title) && isNonEmptyString(value.description);
+}
+function isReleaseNoteSection(value) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["heading", "items"])) {
+    return false;
+  }
+  return isReleaseNoteHeading(value.heading) && Array.isArray(value.items) && value.items.length > 0 && value.items.every(isReleaseNoteItem);
+}
+function validateReleaseNotes(value) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["sections"])) {
+    return false;
+  }
+  return Array.isArray(value.sections) && value.sections.length > 0 && value.sections.every(isReleaseNoteSection);
+}
+function renderNotes(notes) {
+  return notes.sections.map((section) => {
+    const items = section.items.map((item) => `- **${item.title.trim()}** — ${item.description.trim()}`).join(`
+`);
+    return `### ${section.heading}
+
+${items}`;
+  }).join(`
+
+`).trim();
+}
 
 // src/lib/prompt.ts
-var SYSTEM_PROMPT = `You are a release notes writer. You generate clean, reader-friendly release notes for software projects.
+var SYSTEM_PROMPT = `You are a release notes writer. You generate clean, reader-friendly release-note data for software projects.
 
 You have access to the codebase via tools. Use them to understand what actually changed — don't just rephrase commit messages.
 
-Rules:
-- Output ONLY the release notes markdown. No preamble, no explanation, no wrapping code fences.
+Output requirements:
+- Output ONLY structured data matching the configured JSON schema. No preamble, no explanation, no wrapping code fences.
+- The root object has a sections array with at least one section.
+- Each section heading must be one of: What's New, Improvements, Fixes, Breaking Changes.
+- Each section has at least one item with a non-empty title and non-empty description.
+
+Content rules:
 - Focus on what matters to users of this software.
-- Group changes by theme (What's New, Fixes, Improvements, Breaking Changes) as appropriate. Use ### headings.
-- Use bold for feature names, em dash for descriptions.
+- Group changes by theme using the schema headings as appropriate.
+- Use item titles for feature or change names.
+- Use item descriptions for the user-facing explanation.
 - Write in present tense, active voice.
 - Be specific about what changed, not vague.
-- Do NOT include the version number as a heading — semantic-release adds that.
+- Do NOT include the version number as a heading or item title.
 - Do NOT include commit hashes or links.
 - If a voice/tone guide is provided, match its tone and style.
 - Skip trivial changes (version bumps, CI config tweaks) unless they're the only changes.`;
@@ -97,14 +188,56 @@ ${commitLog}`);
   if (style === "concise") {
     parts.push(`
 ## Style
-`, "Keep notes brief — one sentence per change, no paragraphs. Bullet points only.");
+`, "Keep descriptions brief — one sentence per change.");
   } else {
     parts.push(`
 ## Style
-`, "You may include a short paragraph (2-3 sentences) for significant features. Use bullet points for smaller changes.");
+`, "You may use 2-3 sentences in the description for significant features. Keep smaller changes to one sentence.");
   }
   return parts.join(`
 `);
+}
+function buildClaudeArgs({
+  model,
+  maxTurns,
+  sysFile,
+  prompt
+}) {
+  return [
+    "-p",
+    "--bare",
+    "--json-schema",
+    JSON.stringify(releaseNotesSchema),
+    "--model",
+    model,
+    "--max-turns",
+    maxTurns,
+    "--allowedTools",
+    "Read,Glob,Grep,Bash",
+    "--disallowedTools",
+    "Write,Edit,NotebookEdit",
+    "--append-system-prompt-file",
+    sysFile,
+    "--dangerously-skip-permissions",
+    prompt
+  ];
+}
+function renderClaudeStructuredOutput(stdout) {
+  const trimmed = stdout.trim();
+  if (!trimmed)
+    throw new Error("Empty response from Claude");
+  const parsed = JSON.parse(trimmed);
+  if (!validateReleaseNotes(parsed)) {
+    throw new Error("Claude returned invalid structured release notes");
+  }
+  return renderNotes(parsed);
+}
+function renderClaudeStructuredOutputOrFallback(stdout, commitLog) {
+  try {
+    return renderClaudeStructuredOutput(stdout);
+  } catch {
+    return commitLog;
+  }
 }
 async function main() {
   const model = getInput("model", "claude-haiku-4-5");
@@ -131,22 +264,7 @@ async function main() {
   writeFileSync(sysFile, SYSTEM_PROMPT);
   let notes = "";
   try {
-    const result = spawnSync("claude", [
-      "-p",
-      "--bare",
-      "--model",
-      model,
-      "--max-turns",
-      maxTurns,
-      "--allowedTools",
-      "Read,Glob,Grep,Bash",
-      "--disallowedTools",
-      "Write,Edit,NotebookEdit",
-      "--append-system-prompt-file",
-      sysFile,
-      "--dangerously-skip-permissions",
-      prompt
-    ], {
+    const result = spawnSync("claude", buildClaudeArgs({ model, maxTurns, sysFile, prompt }), {
       encoding: "utf-8",
       cwd: repoRoot,
       timeout: 300000,
@@ -155,9 +273,7 @@ async function main() {
     if (result.status !== 0) {
       throw new Error(result.stderr || `Exit code ${result.status}`);
     }
-    notes = result.stdout.trim();
-    if (!notes)
-      throw new Error("Empty response from Claude");
+    notes = renderClaudeStructuredOutput(result.stdout);
     console.log("AI release notes generated successfully.");
   } catch (err) {
     console.log(`::warning::AI generation failed: ${err.message}`);
@@ -184,7 +300,14 @@ async function main() {
     }
   }
 }
-main().catch((err) => {
-  console.log(`::error::${err.message}`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.log(`::error::${err.message}`);
+    process.exit(1);
+  });
+}
+export {
+  renderClaudeStructuredOutputOrFallback,
+  renderClaudeStructuredOutput,
+  buildClaudeArgs
+};
