@@ -54,7 +54,7 @@ If the AI call fails for any reason, it falls back to basic commit-list notes. A
 |--------|---------|-------------|
 | `model` | `claude-haiku-4-5` | Claude model to use |
 | `brandFile` | `brand.md` | Path to a voice/tone guide (optional) |
-| `style` | `concise` | `"concise"` (bullet points) or `"detailed"` (short paragraphs) |
+| `style` | `concise` | `"concise"` (brief bullet descriptions) or `"detailed"` (longer, multi-sentence bullet descriptions) |
 | `maxTurns` | `15` | Max agent tool-use rounds (caps cost) |
 
 All options are optional. Zero config works.

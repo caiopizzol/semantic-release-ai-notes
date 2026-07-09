@@ -5,6 +5,25 @@ import os from "node:os";
 import path from "node:path";
 import type { GenerateNotesContext } from "../types.js";
 import { _resetCache, getRepoRoot } from "./generate-notes.js";
+import {
+	type ReleaseNotes,
+	releaseNotesSchema,
+	renderNotes,
+} from "./notes-schema.js";
+
+const structuredNotes: ReleaseNotes = {
+	sections: [
+		{
+			heading: "What's New",
+			items: [
+				{
+					title: "Cool feature",
+					description: "Adds the cool feature to release notes.",
+				},
+			],
+		},
+	],
+};
 
 function makeContext(
 	overrides: Partial<GenerateNotesContext> = {},
@@ -35,14 +54,7 @@ function makeContext(
 function createTempGitRepo(): string {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "sr-ai-notes-test-"));
 	execSync("git init", { cwd: root, stdio: "ignore" });
-	execSync("git config user.email test@test.com", {
-		cwd: root,
-		stdio: "ignore",
-	});
-	execSync("git config user.name Test", { cwd: root, stdio: "ignore" });
-	// Need at least one commit for git rev-parse to work reliably
 	fs.writeFileSync(path.join(root, "README.md"), "# test");
-	execSync("git add . && git commit -m 'init'", { cwd: root, stdio: "ignore" });
 	return root;
 }
 
@@ -51,26 +63,35 @@ describe("generateNotes", () => {
 		_resetCache();
 	});
 
-	test("returns agent result on success", async () => {
-		const mockNotes = "### What's New\n\n- **Cool feature** — does cool things";
+	test("renders structured output on success", async () => {
+		let capturedOutputFormat: unknown = null;
 
 		mock.module("@anthropic-ai/claude-agent-sdk", () => ({
-			query: () =>
-				(async function* () {
+			query: (opts: { options: { outputFormat?: unknown } }) => {
+				capturedOutputFormat = opts.options.outputFormat;
+				return (async function* () {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: mockNotes,
+						result:
+							"Perfect! Now I have a clear understanding of the changes...",
+						structured_output: structuredNotes,
 						num_turns: 3,
 						total_cost_usd: 0.02,
 					};
-				})(),
+				})();
+			},
 		}));
 
 		// Re-import to pick up the mock
 		const { generateNotes } = await import("./generate-notes.js");
 		const result = await generateNotes({}, makeContext());
-		expect(result).toBe(mockNotes);
+		expect(result).toBe(renderNotes(structuredNotes));
+		expect(result).not.toContain("Perfect!");
+		expect(capturedOutputFormat).toEqual({
+			type: "json_schema",
+			schema: releaseNotesSchema,
+		});
 	});
 
 	test("falls back on agent error", async () => {
@@ -104,8 +125,28 @@ describe("generateNotes", () => {
 		expect(result).toContain("add cool feature");
 	});
 
+	test("falls back on invalid structured output", async () => {
+		mock.module("@anthropic-ai/claude-agent-sdk", () => ({
+			query: () =>
+				(async function* () {
+					yield {
+						type: "result",
+						subtype: "success",
+						result: "### What's New\n\n- **Ignored** — should not be used",
+						structured_output: {
+							sections: [{ heading: "Notes", items: [] }],
+						},
+					};
+				})(),
+		}));
+
+		const { generateNotes } = await import("./generate-notes.js");
+		const result = await generateNotes({}, makeContext());
+		expect(result).toContain("add cool feature");
+		expect(result).not.toContain("Ignored");
+	});
+
 	test("returns cached result on second call", async () => {
-		const mockNotes = "### Cached notes";
 		let callCount = 0;
 
 		mock.module("@anthropic-ai/claude-agent-sdk", () => ({
@@ -115,7 +156,8 @@ describe("generateNotes", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: mockNotes,
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
@@ -125,8 +167,8 @@ describe("generateNotes", () => {
 		const first = await generateNotes({}, makeContext());
 		const second = await generateNotes({}, makeContext());
 
-		expect(first).toBe(mockNotes);
-		expect(second).toBe(mockNotes);
+		expect(first).toBe(renderNotes(structuredNotes));
+		expect(second).toBe(renderNotes(structuredNotes));
 		expect(callCount).toBe(1); // Agent only called once
 	});
 });
@@ -186,7 +228,8 @@ describe("monorepo support", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: "### Notes",
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
@@ -217,7 +260,8 @@ describe("monorepo support", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: "### Notes",
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
@@ -245,7 +289,8 @@ describe("monorepo support", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: "### Notes",
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
@@ -274,7 +319,8 @@ describe("monorepo support", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: "### Notes",
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
@@ -305,7 +351,8 @@ describe("monorepo support", () => {
 					yield {
 						type: "result",
 						subtype: "success",
-						result: "### Notes",
+						result: "Ignored text result",
+						structured_output: structuredNotes,
 					};
 				})();
 			},
