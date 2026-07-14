@@ -46,7 +46,11 @@ If the AI call fails for any reason, it falls back to basic commit-list notes. A
   "model": "claude-haiku-4-5",
   "brandFile": "brand.md",
   "style": "concise",
-  "maxTurns": 15
+  "maxTurns": 15,
+  "scope": {
+    "paths": ["packages/cli"],
+    "audience": "CLI users"
+  }
 }]
 ```
 
@@ -56,8 +60,67 @@ If the AI call fails for any reason, it falls back to basic commit-list notes. A
 | `brandFile` | `brand.md` | Path to a voice/tone guide (optional) |
 | `style` | `concise` | `"concise"` (brief bullet descriptions) or `"detailed"` (longer, multi-sentence bullet descriptions) |
 | `maxTurns` | `15` | Max agent tool-use rounds (caps cost) |
+| `scope` | — | Optional package-specific release-note boundary; see below |
 
 All options are optional. Zero config works.
+
+### Package scopes
+
+Use `scope` when one repository publishes multiple packages or products. `paths` is required and contains repo-relative paths whose commits and diffs are relevant to that release. `name` defaults to the `name` in the `package.json` at semantic-release's current working directory.
+
+```json
+["semantic-release-ai-notes", {
+  "scope": {
+    "name": "@acme/cli",
+    "paths": ["packages/cli"],
+    "audience": "CLI users",
+    "instructions": "Describe command and configuration changes, not internal refactors."
+  }
+}]
+```
+
+Shared paths can be included when package behavior inherits changes from common code. For example, a SuperDoc-style package can include both its own directory and the shared engine it exposes:
+
+```json
+["semantic-release-ai-notes", {
+  "scope": {
+    "name": "@superdoc/cli",
+    "paths": [
+      "packages/cli",
+      "packages/core",
+      "packages/common"
+    ],
+    "audience": "SuperDoc CLI users",
+    "instructions": "Prioritize document conversion and command-line behavior."
+  }
+}]
+```
+
+The notes distinguish direct package changes from inherited dependency or shared-code changes. Inherited changes are included only when users of that package can observe them. If a package release contains no user-observable scoped change, the result is a single concise dependency-update note.
+
+Scope filters the evidence used to write notes by intersecting semantic-release's selected commits with `paths`. It never adds commits and never changes whether semantic-release creates a release.
+
+`scope` is optional and backward-compatible. Existing configurations keep repository-wide release notes without migration changes.
+
+## GitHub Action
+
+The GitHub Action accepts the same scope concepts. Pass `scope-paths` as a newline-separated value:
+
+```yaml
+- uses: caiopizzol/semantic-release-ai-notes@v1
+  with:
+    anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+    previous-tag: cli-v1.4.0
+    scope-name: '@superdoc/cli'
+    scope-paths: |
+      packages/cli
+      packages/core
+      packages/common
+    scope-audience: 'SuperDoc CLI users'
+    scope-instructions: 'Prioritize document conversion and command-line behavior.'
+```
+
+In monorepos with multiple tag namespaces, pass `previous-tag` explicitly so the comparison starts at the prior release for that package. Without it, the Action auto-detects the nearest repository tag, which may belong to another package.
 
 ## Voice & tone
 

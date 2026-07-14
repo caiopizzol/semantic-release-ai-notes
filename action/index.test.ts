@@ -4,8 +4,12 @@ import {
 	releaseNotesSchema,
 	renderNotes,
 } from "../src/lib/notes-schema.js";
+import { buildPrompt, buildScopeGuidance } from "../src/lib/prompt.js";
 import {
+	buildActionPrompt,
 	buildClaudeArgs,
+	parseActionScope,
+	parseScopePaths,
 	renderClaudeStructuredOutput,
 	renderClaudeStructuredOutputOrFallback,
 } from "./index.ts";
@@ -41,6 +45,60 @@ describe("buildClaudeArgs", () => {
 		const schemaArg = args[schemaIndex + 1];
 		if (!schemaArg) throw new Error("Missing --json-schema value");
 		expect(JSON.parse(schemaArg)).toEqual(releaseNotesSchema);
+	});
+});
+
+describe("Action scope inputs", () => {
+	test("splits newline-separated scope paths", () => {
+		expect(
+			parseScopePaths("packages/cli\n packages/core \r\n\nREADME.md"),
+		).toEqual(["packages/cli", "packages/core", "README.md"]);
+	});
+
+	test("uses the shared scoped guidance block", () => {
+		const scope = parseActionScope({
+			name: "@superdoc/cli",
+			paths: "packages/cli\npackages/core",
+			audience: "CLI users",
+			instructions: "Ignore internal benchmarks.",
+		});
+		if (!scope) throw new Error("Expected a parsed scope");
+		const guidance = buildScopeGuidance({
+			scope,
+			packagePath: "packages/cli",
+		}).join("\n");
+		const actionPrompt = buildActionPrompt({
+			prevTag: "cli-v1.0.0",
+			curTag: "cli-v1.1.0",
+			commitLog: "- feat(cli): add command (abc1234)",
+			brandContent: "",
+			style: "concise",
+			scope,
+			packagePath: "packages/cli",
+		});
+		const pluginPrompt = buildPrompt({
+			commits: [],
+			lastRelease: {
+				version: "1.0.0",
+				gitTag: "cli-v1.0.0",
+				gitHead: "aaa1111",
+			},
+			nextRelease: {
+				version: "1.1.0",
+				gitTag: "cli-v1.1.0",
+				gitHead: "bbb2222",
+				type: "minor",
+			},
+			brandContent: null,
+			scope,
+			packagePath: "packages/cli",
+		});
+
+		expect(actionPrompt).toContain(guidance);
+		expect(pluginPrompt).toContain(guidance);
+		expect(actionPrompt).toContain(
+			"git diff --stat cli-v1.0.0...cli-v1.1.0 -- packages/cli packages/core",
+		);
 	});
 });
 

@@ -1,4 +1,4 @@
-import type { Commit, Release } from "../types.js";
+import type { Commit, Release, ReleaseScope } from "../types.js";
 
 const CONVENTIONAL_PREFIXES: Record<string, string> = {
 	feat: "Features",
@@ -22,8 +22,12 @@ function parsePrefix(subject: string): { prefix: string | null; text: string } {
 export function generateFallbackNotes(
 	commits: ReadonlyArray<Commit>,
 	nextRelease: Release & { type: string },
+	scope?: ReleaseScope,
 ): string {
 	if (commits.length === 0) {
+		if (scope) {
+			return `### Updates\n\n- ${scope.name ?? "This package"} receives dependency updates with no direct user-observable changes.`;
+		}
 		return `## ${nextRelease.version}\n\nNo notable changes.`;
 	}
 

@@ -23,6 +23,18 @@ inputs:
   previous-tag:
     description: 'Previous release tag (auto-detected from git if not set)'
     default: ''
+  scope-name:
+    description: 'Published package or product name (defaults to package.json name)'
+    default: ''
+  scope-paths:
+    description: 'Newline-separated repo-relative paths relevant to this release'
+    default: ''
+  scope-audience:
+    description: 'Intended reader for these release notes'
+    default: ''
+  scope-instructions:
+    description: 'Additional relevance rules appended to the maintained prompt'
+    default: ''
   update-release:
     description: 'Update the GitHub release for the current tag with generated notes'
     default: 'false'
@@ -52,6 +64,10 @@ runs:
         INPUT_MAX_TURNS: ${{ inputs.max-turns }}
         INPUT_BRAND_FILE: ${{ inputs.brand-file }}
         INPUT_PREVIOUS_TAG: ${{ inputs.previous-tag }}
+        INPUT_SCOPE_NAME: ${{ inputs.scope-name }}
+        INPUT_SCOPE_PATHS: ${{ inputs.scope-paths }}
+        INPUT_SCOPE_AUDIENCE: ${{ inputs.scope-audience }}
+        INPUT_SCOPE_INSTRUCTIONS: ${{ inputs.scope-instructions }}
         INPUT_UPDATE_RELEASE: ${{ inputs.update-release }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: node "${{ github.action_path }}/dist/action/index.mjs"

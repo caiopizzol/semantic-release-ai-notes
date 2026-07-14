@@ -1,15 +1,24 @@
-import { execSync, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { generateFallbackNotes } from "../src/lib/fallback.js";
+import {
+	filterCommitsByScope,
+	getPackagePath,
+	getRepoRoot,
+	resolveScopeName,
+} from "../src/lib/git.js";
 import {
 	releaseNotesSchema,
 	renderNotes,
 	validateReleaseNotes,
 } from "../src/lib/notes-schema.js";
-import { SYSTEM_PROMPT } from "../src/lib/prompt.js";
+import { buildPrompt, SYSTEM_PROMPT } from "../src/lib/prompt.js";
+import { validateScope } from "../src/lib/scope.js";
+import type { Commit, Release, ReleaseScope } from "../src/types.js";
 
 // --- GitHub Actions helpers ---
 
@@ -30,24 +39,17 @@ function setOutput(name: string, value: string): void {
 
 // --- Git helpers ---
 
-function git(cmd: string): string {
-	return execSync(`git ${cmd}`, {
+function git(args: string[], cwd = process.cwd()): string {
+	return execFileSync("git", args, {
+		cwd,
 		encoding: "utf-8",
 		maxBuffer: 10_000_000,
 	}).trim();
 }
 
-function getRepoRoot(): string {
-	try {
-		return git("rev-parse --show-toplevel");
-	} catch {
-		return process.cwd();
-	}
-}
-
 function detectPreviousTag(): string {
 	try {
-		return git("describe --tags --abbrev=0 HEAD^");
+		return git(["describe", "--tags", "--abbrev=0", "HEAD^"]);
 	} catch {
 		return "";
 	}
@@ -55,74 +57,93 @@ function detectPreviousTag(): string {
 
 function detectCurrentTag(): string {
 	try {
-		return git("describe --tags --exact-match HEAD");
+		return git(["describe", "--tags", "--exact-match", "HEAD"]);
 	} catch {
-		return git("rev-parse --short HEAD");
+		return git(["rev-parse", "--short", "HEAD"]);
 	}
 }
 
-function getCommitLog(from: string, to: string): string {
+function getCommits(from: string, to: string, repoRoot: string): Commit[] {
 	const range = from ? `${from}..${to}` : to;
 	try {
-		return git(`log --format="- %s (%h)" ${range}`);
+		const log = git(["log", "--format=%H%x1f%s", range], repoRoot);
+		if (!log) return [];
+		return log.split("\n").map((line) => {
+			const [hash = "", subject = ""] = line.split("\x1f", 2);
+			return { hash, subject, body: "", message: subject };
+		});
 	} catch {
-		return "";
+		return [];
 	}
 }
 
-// --- Prompt building ---
+function formatCommitLog(commits: ReadonlyArray<Commit>): string {
+	return commits
+		.map((commit) => `- ${commit.subject} (${commit.hash.slice(0, 7)})`)
+		.join("\n");
+}
 
-function buildPrompt(
-	prevTag: string,
-	curTag: string,
-	commitLog: string,
-	brandContent: string,
-	style: string,
-): string {
-	const parts: string[] = [];
+export function parseScopePaths(value: string): string[] {
+	return value
+		.split(/\r?\n/)
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
 
-	const prev = prevTag
-		? `Previous release: ${prevTag}.`
-		: "This is the first release.";
-	parts.push(`Generate release notes for ${curTag}. ${prev}`);
+export function parseActionScope({
+	name,
+	paths,
+	audience,
+	instructions,
+}: {
+	name: string;
+	paths: string;
+	audience: string;
+	instructions: string;
+}): ReleaseScope | undefined {
+	if (!name && !paths && !audience && !instructions) return undefined;
+	return validateScope({
+		name: name || undefined,
+		paths: parseScopePaths(paths),
+		audience: audience || undefined,
+		instructions: instructions || undefined,
+	});
+}
 
-	parts.push(`\n## Commits in this release\n\n${commitLog}`);
-
-	if (prevTag) {
-		parts.push(
-			"\n## Instructions\n",
-			`Run \`git diff --stat ${prevTag}...${curTag}\` to see which files changed.`,
-			"Then read the most important changed files to understand what was actually done.",
-			"Use the commit hashes above to guide your exploration — but do not include them in the output.",
-		);
-	} else {
-		parts.push(
-			"\n## Instructions\n",
-			"This is the first release. Read the project's README or main source files to understand what this project does, then summarize its initial capabilities.",
-		);
-	}
-
-	if (brandContent) {
-		parts.push(
-			"\n## Voice & Tone Guide\n",
-			"Match this tone when writing the notes:\n",
-			brandContent,
-		);
-	}
-
-	if (style === "concise") {
-		parts.push(
-			"\n## Style\n",
-			"Keep descriptions brief — one sentence per change.",
-		);
-	} else {
-		parts.push(
-			"\n## Style\n",
-			"You may use 2-3 sentences in the description for significant features. Keep smaller changes to one sentence.",
-		);
-	}
-
-	return parts.join("\n");
+export function buildActionPrompt({
+	prevTag,
+	curTag,
+	commitLog,
+	brandContent,
+	style,
+	scope,
+	packagePath,
+}: {
+	prevTag: string;
+	curTag: string;
+	commitLog: string;
+	brandContent: string;
+	style: "concise" | "detailed";
+	scope?: ReleaseScope;
+	packagePath?: string;
+}): string {
+	return buildPrompt({
+		commits: commitLog ? commitLog.split("\n") : [],
+		lastRelease: {
+			version: prevTag,
+			gitTag: prevTag,
+			gitHead: prevTag,
+		},
+		nextRelease: {
+			version: curTag,
+			gitTag: curTag,
+			gitHead: curTag,
+		},
+		brandContent,
+		style,
+		scope,
+		packagePath,
+	});
 }
 
 export function buildClaudeArgs({
@@ -187,8 +208,19 @@ async function main(): Promise<void> {
 	const maxTurns = getInput("max_turns", "15");
 	const brandFile = getInput("brand_file", "brand.md");
 	const updateRelease = getInput("update_release") === "true";
+	const configuredScope = parseActionScope({
+		name: getInput("scope_name"),
+		paths: getInput("scope_paths"),
+		audience: getInput("scope_audience"),
+		instructions: getInput("scope_instructions"),
+	});
 
-	const repoRoot = getRepoRoot();
+	const cwd = process.cwd();
+	const repoRoot = getRepoRoot(cwd);
+	const scope = configuredScope
+		? resolveScopeName(configuredScope, cwd)
+		: undefined;
+	const packagePath = scope ? getPackagePath(repoRoot, cwd) : undefined;
 	const prevTag = getInput("previous_tag") || detectPreviousTag();
 	const curTag = detectCurrentTag();
 
@@ -196,8 +228,12 @@ async function main(): Promise<void> {
 		`Generating AI release notes for ${curTag}${prevTag ? ` (from ${prevTag})` : ""}`,
 	);
 
-	const commitLog = getCommitLog(prevTag, curTag);
-	if (!commitLog) {
+	const releaseCommits = getCommits(prevTag, curTag, repoRoot);
+	const commits = scope
+		? filterCommitsByScope(releaseCommits, scope.paths, repoRoot)
+		: releaseCommits;
+	const commitLog = formatCommitLog(commits);
+	if (!commitLog && !scope) {
 		console.log("No commits found.");
 		setOutput("notes", "No notable changes.");
 		return;
@@ -211,7 +247,21 @@ async function main(): Promise<void> {
 		// No brand file — that's fine
 	}
 
-	const prompt = buildPrompt(prevTag, curTag, commitLog, brandContent, style);
+	const nextRelease: Release & { type: string } = {
+		version: curTag,
+		gitTag: curTag,
+		gitHead: curTag,
+		type: "",
+	};
+	const prompt = buildActionPrompt({
+		prevTag,
+		curTag,
+		commitLog,
+		brandContent,
+		style: style === "detailed" ? "detailed" : "concise",
+		scope,
+		packagePath,
+	});
 
 	// Write system prompt to temp file
 	const sysFile = join(tmpdir(), `sr-ai-notes-system-${randomUUID()}.txt`);
@@ -241,7 +291,9 @@ async function main(): Promise<void> {
 	} catch (err) {
 		console.log(`::warning::AI generation failed: ${(err as Error).message}`);
 		console.log("Falling back to commit-list notes.");
-		notes = commitLog;
+		notes = scope
+			? generateFallbackNotes(commits, nextRelease, scope)
+			: commitLog;
 	}
 
 	setOutput("notes", notes);
@@ -259,10 +311,14 @@ async function main(): Promise<void> {
 		try {
 			const notesFile = join(tmpdir(), `sr-ai-notes-${randomUUID()}.md`);
 			writeFileSync(notesFile, notes);
-			execSync(`gh release edit "${curTag}" --notes-file "${notesFile}"`, {
-				encoding: "utf-8",
-				env: { ...process.env, GH_TOKEN: ghToken },
-			});
+			execFileSync(
+				"gh",
+				["release", "edit", curTag, "--notes-file", notesFile],
+				{
+					encoding: "utf-8",
+					env: { ...process.env, GH_TOKEN: ghToken },
+				},
+			);
 			console.log(`Updated GitHub release ${curTag}.`);
 		} catch (err) {
 			console.log(

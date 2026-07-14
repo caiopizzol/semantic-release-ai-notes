@@ -19,6 +19,17 @@ describe("generateFallbackNotes", () => {
 		expect(result).toContain("No notable changes");
 	});
 
+	test("frames an empty scoped release as a dependency update", () => {
+		const result = generateFallbackNotes([], nextRelease, {
+			name: "@superdoc/cli",
+			paths: ["packages/cli"],
+		});
+		expect(result).toBe(
+			"### Updates\n\n- @superdoc/cli receives dependency updates with no direct user-observable changes.",
+		);
+		expect(result).not.toContain("No notable changes");
+	});
+
 	test("groups by conventional commit prefix", () => {
 		const commits = [
 			makeCommit("feat: add new feature"),
