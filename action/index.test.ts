@@ -9,6 +9,7 @@ import {
 } from "../src/lib/notes-schema.js";
 import { buildPrompt, buildScopeGuidance } from "../src/lib/prompt.js";
 import {
+	assertFullHistory,
 	buildActionPrompt,
 	buildClaudeArgs,
 	parseActionScope,
@@ -72,6 +73,32 @@ describe("Action scope inputs", () => {
 		expect(() => parseScopePackagePath("/abs/path")).not.toThrow(
 			"scope.paths[0]",
 		);
+	});
+
+	test("rejects shallow clones for scoped runs with an actionable message", () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sr-ai-notes-shallow-"));
+		try {
+			const src = path.join(dir, "src");
+			const run = (cwd: string, ...args: string[]) =>
+				Bun.spawnSync(["git", ...args], { cwd });
+			fs.mkdirSync(src);
+			run(src, "init", "-b", "main");
+			run(src, "config", "user.email", "test@example.com");
+			run(src, "config", "user.name", "Test User");
+			fs.writeFileSync(path.join(src, "a.txt"), "a");
+			run(src, "add", ".");
+			run(src, "commit", "-m", "one");
+			fs.writeFileSync(path.join(src, "a.txt"), "b");
+			run(src, "commit", "-am", "two");
+			run(dir, "clone", "--depth", "1", `file://${src}`, "shallow");
+
+			expect(() => assertFullHistory(path.join(dir, "shallow"))).toThrow(
+				"fetch-depth: 0",
+			);
+			expect(() => assertFullHistory(src)).not.toThrow();
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	test("prefers scope-package-path for package location and default name", () => {

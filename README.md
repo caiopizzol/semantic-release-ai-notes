@@ -107,6 +107,10 @@ Scope filters the evidence used to write notes by intersecting semantic-release'
 The GitHub Action accepts the same scope concepts. Pass `scope-paths` as a newline-separated value:
 
 ```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0 # scoped runs need full history; a shallow clone fails with an error
+
 - uses: caiopizzol/semantic-release-ai-notes@v1
   with:
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

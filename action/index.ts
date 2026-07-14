@@ -126,6 +126,22 @@ export function parseScopePackagePath(value: string): string | undefined {
 	}
 }
 
+export function assertFullHistory(repoRoot: string): void {
+	let shallow: string;
+	try {
+		shallow = git(["rev-parse", "--is-shallow-repository"], repoRoot);
+	} catch {
+		return;
+	}
+	// In a shallow clone the parent of the fetch-boundary commit is missing, so
+	// scoped filtering would treat it as a root commit and match every path.
+	if (shallow === "true") {
+		throw new Error(
+			"Scoped release notes require full git history, but this repository is a shallow clone. Use actions/checkout with `fetch-depth: 0`.",
+		);
+	}
+}
+
 export function resolveActionScopeContext({
 	scope,
 	scopePackagePath,
@@ -259,6 +275,7 @@ async function main(): Promise<void> {
 
 	const cwd = process.cwd();
 	const repoRoot = getRepoRoot(cwd);
+	if (configuredScope) assertFullHistory(repoRoot);
 	const { scope, packagePath } = resolveActionScopeContext({
 		scope: configuredScope,
 		scopePackagePath,

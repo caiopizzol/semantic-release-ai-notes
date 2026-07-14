@@ -462,6 +462,17 @@ function parseScopePackagePath(value) {
     throw new Error(error.message.replace(/scope\.paths\[0\]/g, "scope-package-path"));
   }
 }
+function assertFullHistory(repoRoot) {
+  let shallow;
+  try {
+    shallow = git(["rev-parse", "--is-shallow-repository"], repoRoot);
+  } catch {
+    return;
+  }
+  if (shallow === "true") {
+    throw new Error("Scoped release notes require full git history, but this repository is a shallow clone. Use actions/checkout with `fetch-depth: 0`.");
+  }
+}
 function resolveActionScopeContext({
   scope,
   scopePackagePath,
@@ -562,6 +573,8 @@ async function main() {
   const scopePackagePath = parseScopePackagePath(getInput("scope_package_path"));
   const cwd = process.cwd();
   const repoRoot = getRepoRoot(cwd);
+  if (configuredScope)
+    assertFullHistory(repoRoot);
   const { scope, packagePath } = resolveActionScopeContext({
     scope: configuredScope,
     scopePackagePath,
@@ -652,5 +665,6 @@ export {
   parseScopePackagePath,
   parseActionScope,
   buildClaudeArgs,
-  buildActionPrompt
+  buildActionPrompt,
+  assertFullHistory
 };
