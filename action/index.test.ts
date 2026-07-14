@@ -66,6 +66,12 @@ describe("Action scope inputs", () => {
 		expect(() => parseScopePackagePath("packages/*")).toThrow(
 			"glob patterns are not supported",
 		);
+		expect(() => parseScopePackagePath("packages/*")).toThrow(
+			"scope-package-path",
+		);
+		expect(() => parseScopePackagePath("/abs/path")).not.toThrow(
+			"scope.paths[0]",
+		);
 	});
 
 	test("prefers scope-package-path for package location and default name", () => {

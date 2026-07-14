@@ -112,7 +112,18 @@ export function parseActionScope({
 
 export function parseScopePackagePath(value: string): string | undefined {
 	if (!value) return undefined;
-	return validateScope({ paths: [value] })?.paths[0];
+	try {
+		return validateScope({ paths: [value] })?.paths[0];
+	} catch (error) {
+		// Relabel the shared scope.paths validation error so the message names
+		// the Action input the user actually has to fix.
+		throw new Error(
+			(error as Error).message.replace(
+				/scope\.paths\[0\]/g,
+				"scope-package-path",
+			),
+		);
+	}
 }
 
 export function resolveActionScopeContext({

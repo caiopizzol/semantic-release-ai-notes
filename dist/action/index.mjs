@@ -456,7 +456,11 @@ function parseActionScope({
 function parseScopePackagePath(value) {
   if (!value)
     return;
-  return validateScope({ paths: [value] })?.paths[0];
+  try {
+    return validateScope({ paths: [value] })?.paths[0];
+  } catch (error) {
+    throw new Error(error.message.replace(/scope\.paths\[0\]/g, "scope-package-path"));
+  }
 }
 function resolveActionScopeContext({
   scope,
