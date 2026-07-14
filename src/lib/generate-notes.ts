@@ -33,8 +33,14 @@ export async function generateNotes(
 ): Promise<string> {
 	const { commits, lastRelease, nextRelease, logger } = context;
 	const cwd = context.cwd || process.cwd();
-	const repoRoot = getRepoRoot(cwd);
 	const validatedScope = validateScope(pluginConfig.scope);
+
+	if (cachedNotes) {
+		logger.log("Returning cached AI release notes.");
+		return cachedNotes;
+	}
+
+	const repoRoot = getRepoRoot(cwd);
 	const scope = validatedScope
 		? resolveScopeName(validatedScope, cwd)
 		: undefined;
@@ -42,11 +48,6 @@ export async function generateNotes(
 	const relevantCommits = scope
 		? filterCommitsByScope(commits, scope.paths, repoRoot)
 		: commits;
-
-	if (cachedNotes) {
-		logger.log("Returning cached AI release notes.");
-		return cachedNotes;
-	}
 
 	// Read brand/voice file if it exists — resolve from repo root so monorepo
 	// packages can find a root-level brand.md

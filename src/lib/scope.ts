@@ -29,6 +29,9 @@ function validatePath(value: unknown, index: number): string {
 	}
 
 	const scopedPath = value.trim();
+	if (scopedPath.startsWith(":")) {
+		return invalid(option, "paths must be literal repo-relative paths");
+	}
 	if (scopedPath.includes("\n") || scopedPath.includes("\r")) {
 		return invalid(option, "must not contain newlines");
 	}

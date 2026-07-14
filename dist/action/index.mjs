@@ -339,6 +339,9 @@ function validatePath(value, index) {
     return invalid(option, "must be a non-empty repo-relative string");
   }
   const scopedPath = value.trim();
+  if (scopedPath.startsWith(":")) {
+    return invalid(option, "paths must be literal repo-relative paths");
+  }
   if (scopedPath.includes(`
 `) || scopedPath.includes("\r")) {
     return invalid(option, "must not contain newlines");

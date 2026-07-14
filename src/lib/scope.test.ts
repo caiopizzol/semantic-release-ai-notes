@@ -22,6 +22,8 @@ describe("validateScope", () => {
 		["non-array", { paths: "packages/cli" }, "scope.paths"],
 		["empty array", { paths: [] }, "scope.paths"],
 		["empty path", { paths: [""] }, "scope.paths[0]"],
+		["pathspec magic", { paths: [":(exclude)pkg"] }, "scope.paths[0]"],
+		["root pathspec magic", { paths: [":/"] }, "scope.paths[0]"],
 		["absolute POSIX path", { paths: ["/packages/cli"] }, "scope.paths[0]"],
 		[
 			"absolute Windows path",
