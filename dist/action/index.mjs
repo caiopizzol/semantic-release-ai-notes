@@ -95,12 +95,12 @@ function resolveScopeName(scope, cwd) {
 }
 function filterCommitsByScope(commits, paths, repoRoot) {
   return commits.filter((commit) => {
-    const changed = runGit([
+    const firstParent = runGit(["rev-parse", "--verify", `${commit.hash}^`], repoRoot);
+    const changed = firstParent ? runGit(["diff", "--name-only", firstParent, commit.hash, "--", ...paths], repoRoot) : runGit([
       "diff-tree",
       "--no-commit-id",
       "--name-only",
       "-r",
-      "-m",
       "--root",
       commit.hash,
       "--",
@@ -340,7 +340,10 @@ function validatePath(value, index) {
   }
   const scopedPath = value.trim();
   if (scopedPath.startsWith(":")) {
-    return invalid(option, "paths must be literal repo-relative paths");
+    return invalid(option, "must be a literal repo-relative path");
+  }
+  if (["*", "?", "[", "]"].some((character) => scopedPath.includes(character))) {
+    return invalid(option, "must be a literal repo-relative path: glob patterns are not supported; list directories instead");
   }
   if (scopedPath.includes(`
 `) || scopedPath.includes("\r")) {
@@ -450,6 +453,26 @@ function parseActionScope({
     instructions: instructions || undefined
   });
 }
+function parseScopePackagePath(value) {
+  if (!value)
+    return;
+  return validateScope({ paths: [value] })?.paths[0];
+}
+function resolveActionScopeContext({
+  scope,
+  scopePackagePath,
+  repoRoot,
+  cwd
+}) {
+  if (!scope)
+    return {};
+  const packagePath = scopePackagePath ?? getPackagePath(repoRoot, cwd);
+  const packageDirectory = scopePackagePath ? resolve(repoRoot, scopePackagePath) : cwd;
+  return {
+    scope: resolveScopeName(scope, packageDirectory),
+    packagePath
+  };
+}
 function buildActionPrompt({
   prevTag,
   curTag,
@@ -532,10 +555,15 @@ async function main() {
     audience: getInput("scope_audience"),
     instructions: getInput("scope_instructions")
   });
+  const scopePackagePath = parseScopePackagePath(getInput("scope_package_path"));
   const cwd = process.cwd();
   const repoRoot = getRepoRoot(cwd);
-  const scope = configuredScope ? resolveScopeName(configuredScope, cwd) : undefined;
-  const packagePath = scope ? getPackagePath(repoRoot, cwd) : undefined;
+  const { scope, packagePath } = resolveActionScopeContext({
+    scope: configuredScope,
+    scopePackagePath,
+    repoRoot,
+    cwd
+  });
   const prevTag = getInput("previous_tag") || detectPreviousTag();
   const curTag = detectCurrentTag();
   console.log(`Generating AI release notes for ${curTag}${prevTag ? ` (from ${prevTag})` : ""}`);
@@ -613,9 +641,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 export {
+  resolveActionScopeContext,
   renderClaudeStructuredOutputOrFallback,
   renderClaudeStructuredOutput,
   parseScopePaths,
+  parseScopePackagePath,
   parseActionScope,
   buildClaudeArgs,
   buildActionPrompt

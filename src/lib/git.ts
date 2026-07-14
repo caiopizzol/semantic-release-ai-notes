@@ -50,20 +50,28 @@ export function filterCommitsByScope(
 	repoRoot: string,
 ): Commit[] {
 	return commits.filter((commit) => {
-		const changed = runGit(
-			[
-				"diff-tree",
-				"--no-commit-id",
-				"--name-only",
-				"-r",
-				"-m",
-				"--root",
-				commit.hash,
-				"--",
-				...paths,
-			],
+		const firstParent = runGit(
+			["rev-parse", "--verify", `${commit.hash}^`],
 			repoRoot,
 		);
+		const changed = firstParent
+			? runGit(
+					["diff", "--name-only", firstParent, commit.hash, "--", ...paths],
+					repoRoot,
+				)
+			: runGit(
+					[
+						"diff-tree",
+						"--no-commit-id",
+						"--name-only",
+						"-r",
+						"--root",
+						commit.hash,
+						"--",
+						...paths,
+					],
+					repoRoot,
+				);
 		return Boolean(changed);
 	});
 }

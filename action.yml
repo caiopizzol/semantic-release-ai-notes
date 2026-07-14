@@ -29,6 +29,9 @@ inputs:
   scope-paths:
     description: 'Newline-separated repo-relative paths relevant to this release'
     default: ''
+  scope-package-path:
+    description: 'Repo-relative package directory used for prompt context and package.json defaults'
+    default: ''
   scope-audience:
     description: 'Intended reader for these release notes'
     default: ''
@@ -66,6 +69,7 @@ runs:
         INPUT_PREVIOUS_TAG: ${{ inputs.previous-tag }}
         INPUT_SCOPE_NAME: ${{ inputs.scope-name }}
         INPUT_SCOPE_PATHS: ${{ inputs.scope-paths }}
+        INPUT_SCOPE_PACKAGE_PATH: ${{ inputs.scope-package-path }}
         INPUT_SCOPE_AUDIENCE: ${{ inputs.scope-audience }}
         INPUT_SCOPE_INSTRUCTIONS: ${{ inputs.scope-instructions }}
         INPUT_UPDATE_RELEASE: ${{ inputs.update-release }}

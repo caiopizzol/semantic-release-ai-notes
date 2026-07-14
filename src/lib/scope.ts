@@ -30,7 +30,15 @@ function validatePath(value: unknown, index: number): string {
 
 	const scopedPath = value.trim();
 	if (scopedPath.startsWith(":")) {
-		return invalid(option, "paths must be literal repo-relative paths");
+		return invalid(option, "must be a literal repo-relative path");
+	}
+	if (
+		["*", "?", "[", "]"].some((character) => scopedPath.includes(character))
+	) {
+		return invalid(
+			option,
+			"must be a literal repo-relative path: glob patterns are not supported; list directories instead",
+		);
 	}
 	if (scopedPath.includes("\n") || scopedPath.includes("\r")) {
 		return invalid(option, "must not contain newlines");

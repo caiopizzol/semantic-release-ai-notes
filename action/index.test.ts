@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
 	type ReleaseNotes,
 	releaseNotesSchema,
@@ -9,9 +12,11 @@ import {
 	buildActionPrompt,
 	buildClaudeArgs,
 	parseActionScope,
+	parseScopePackagePath,
 	parseScopePaths,
 	renderClaudeStructuredOutput,
 	renderClaudeStructuredOutputOrFallback,
+	resolveActionScopeContext,
 } from "./index.ts";
 
 const structuredNotes: ReleaseNotes = {
@@ -53,6 +58,60 @@ describe("Action scope inputs", () => {
 		expect(
 			parseScopePaths("packages/cli\n packages/core \r\n\nREADME.md"),
 		).toEqual(["packages/cli", "packages/core", "README.md"]);
+	});
+
+	test("parses a literal package path and rejects glob patterns", () => {
+		expect(parseScopePackagePath(" packages\\cli ")).toBe("packages/cli");
+		expect(parseScopePackagePath("")).toBeUndefined();
+		expect(() => parseScopePackagePath("packages/*")).toThrow(
+			"glob patterns are not supported",
+		);
+	});
+
+	test("prefers scope-package-path for package location and default name", () => {
+		const repoRoot = fs.mkdtempSync(
+			path.join(os.tmpdir(), "sr-ai-notes-action-scope-"),
+		);
+		try {
+			const cwd = path.join(repoRoot, "packages/current");
+			const selected = path.join(repoRoot, "packages/selected");
+			fs.mkdirSync(cwd, { recursive: true });
+			fs.mkdirSync(selected, { recursive: true });
+			fs.writeFileSync(
+				path.join(cwd, "package.json"),
+				'{"name":"@acme/current"}',
+			);
+			fs.writeFileSync(
+				path.join(selected, "package.json"),
+				'{"name":"@acme/selected"}',
+			);
+
+			expect(
+				resolveActionScopeContext({
+					scope: { paths: ["packages/selected"] },
+					scopePackagePath: "packages/selected",
+					repoRoot,
+					cwd,
+				}),
+			).toEqual({
+				scope: {
+					name: "@acme/selected",
+					paths: ["packages/selected"],
+				},
+				packagePath: "packages/selected",
+			});
+
+			expect(
+				resolveActionScopeContext({
+					scope: { name: "Explicit name", paths: ["packages/selected"] },
+					scopePackagePath: "packages/selected",
+					repoRoot,
+					cwd,
+				}).scope?.name,
+			).toBe("Explicit name");
+		} finally {
+			fs.rmSync(repoRoot, { recursive: true, force: true });
+		}
 	});
 
 	test("uses the shared scoped guidance block", () => {

@@ -110,6 +110,34 @@ export function parseActionScope({
 	});
 }
 
+export function parseScopePackagePath(value: string): string | undefined {
+	if (!value) return undefined;
+	return validateScope({ paths: [value] })?.paths[0];
+}
+
+export function resolveActionScopeContext({
+	scope,
+	scopePackagePath,
+	repoRoot,
+	cwd,
+}: {
+	scope?: ReleaseScope;
+	scopePackagePath?: string;
+	repoRoot: string;
+	cwd: string;
+}): { scope?: ReleaseScope; packagePath?: string } {
+	if (!scope) return {};
+
+	const packagePath = scopePackagePath ?? getPackagePath(repoRoot, cwd);
+	const packageDirectory = scopePackagePath
+		? resolve(repoRoot, scopePackagePath)
+		: cwd;
+	return {
+		scope: resolveScopeName(scope, packageDirectory),
+		packagePath,
+	};
+}
+
 export function buildActionPrompt({
 	prevTag,
 	curTag,
@@ -214,13 +242,18 @@ async function main(): Promise<void> {
 		audience: getInput("scope_audience"),
 		instructions: getInput("scope_instructions"),
 	});
+	const scopePackagePath = parseScopePackagePath(
+		getInput("scope_package_path"),
+	);
 
 	const cwd = process.cwd();
 	const repoRoot = getRepoRoot(cwd);
-	const scope = configuredScope
-		? resolveScopeName(configuredScope, cwd)
-		: undefined;
-	const packagePath = scope ? getPackagePath(repoRoot, cwd) : undefined;
+	const { scope, packagePath } = resolveActionScopeContext({
+		scope: configuredScope,
+		scopePackagePath,
+		repoRoot,
+		cwd,
+	});
 	const prevTag = getInput("previous_tag") || detectPreviousTag();
 	const curTag = detectCurrentTag();
 

@@ -66,7 +66,7 @@ All options are optional. Zero config works.
 
 ### Package scopes
 
-Use `scope` when one repository publishes multiple packages or products. `paths` is required and contains repo-relative paths whose commits and diffs are relevant to that release. `name` defaults to the `name` in the `package.json` at semantic-release's current working directory.
+Use `scope` when one repository publishes multiple packages or products. `paths` is required and contains literal repo-relative file or directory paths whose commits and diffs are relevant to that release. Glob patterns are not supported; list directories instead. `name` defaults to the `name` in the `package.json` at semantic-release's current working directory.
 
 ```json
 ["semantic-release-ai-notes", {
@@ -112,6 +112,7 @@ The GitHub Action accepts the same scope concepts. Pass `scope-paths` as a newli
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
     previous-tag: cli-v1.4.0
     scope-name: '@superdoc/cli'
+    scope-package-path: packages/cli
     scope-paths: |
       packages/cli
       packages/core
@@ -119,6 +120,8 @@ The GitHub Action accepts the same scope concepts. Pass `scope-paths` as a newli
     scope-audience: 'SuperDoc CLI users'
     scope-instructions: 'Prioritize document conversion and command-line behavior.'
 ```
+
+`scope-package-path` identifies the package directory for prompt context and for resolving the default scope name from its `package.json`. Scope paths and the package path are literal repo-relative files or directories, not globs.
 
 In monorepos with multiple tag namespaces, pass `previous-tag` explicitly so the comparison starts at the prior release for that package. Without it, the Action auto-detects the nearest repository tag, which may belong to another package.
 

@@ -34,6 +34,7 @@ describe("package scope git helpers", () => {
 	let cliCommit: Commit;
 	let unrelatedCommit: Commit;
 	let mergeCommit: Commit;
+	let rootCommit: Commit;
 
 	beforeAll(() => {
 		root = fs.mkdtempSync(path.join(os.tmpdir(), "sr-ai-notes-git-"));
@@ -43,7 +44,7 @@ describe("package scope git helpers", () => {
 		write(root, "packages/cli/package.json", '{"name":"@superdoc/cli"}');
 		write(root, "packages/core/index.ts", "export const core = 1;\n");
 		write(root, "packages/other/index.ts", "export const other = 1;\n");
-		commit(root, "chore: initialize fixture");
+		rootCommit = commit(root, "chore: initialize fixture");
 
 		write(root, "packages/core/index.ts", "export const core = 2;\n");
 		coreCommit = commit(root, "feat(core): improve shared engine");
@@ -103,5 +104,56 @@ describe("package scope git helpers", () => {
 		expect(
 			filterCommitsByScope([unrelatedCommit], ["packages/cli"], root),
 		).toEqual([]);
+	});
+
+	test("includes a root commit that touches the scope", () => {
+		expect(filterCommitsByScope([rootCommit], ["packages/cli"], root)).toEqual([
+			rootCommit,
+		]);
+	});
+
+	test("excludes a merge whose first-parent diff does not touch the scope", () => {
+		const mergeRoot = fs.mkdtempSync(
+			path.join(os.tmpdir(), "sr-ai-notes-first-parent-"),
+		);
+		try {
+			git(mergeRoot, "init", "-b", "main");
+			git(mergeRoot, "config", "user.email", "test@example.com");
+			git(mergeRoot, "config", "user.name", "Test User");
+			write(mergeRoot, "packages/cli/index.ts", "export const cli = 1;\n");
+			write(mergeRoot, "packages/other/index.ts", "export const other = 1;\n");
+			commit(mergeRoot, "chore: initialize fixture");
+
+			git(mergeRoot, "checkout", "-b", "feature");
+			git(mergeRoot, "checkout", "main");
+			write(mergeRoot, "packages/cli/index.ts", "export const cli = 2;\n");
+			commit(mergeRoot, "feat(cli): update command");
+
+			git(mergeRoot, "checkout", "feature");
+			write(mergeRoot, "packages/other/index.ts", "export const other = 2;\n");
+			commit(mergeRoot, "feat(other): update unrelated package");
+			git(mergeRoot, "checkout", "main");
+			git(
+				mergeRoot,
+				"merge",
+				"--no-ff",
+				"feature",
+				"-m",
+				"merge: unrelated feature",
+			);
+			const hash = git(mergeRoot, "rev-parse", "HEAD");
+			const merge: Commit = {
+				hash,
+				subject: "merge: unrelated feature",
+				body: "",
+				message: "merge: unrelated feature",
+			};
+
+			expect(
+				filterCommitsByScope([merge], ["packages/cli"], mergeRoot),
+			).toEqual([]);
+		} finally {
+			fs.rmSync(mergeRoot, { recursive: true, force: true });
+		}
 	});
 });

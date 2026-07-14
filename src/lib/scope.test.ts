@@ -54,4 +54,17 @@ describe("validateScope", () => {
 			expect(error).toHaveProperty("code", "EINVALIDSCOPE");
 		}
 	});
+
+	test.each([
+		"*",
+		"?",
+		"[",
+		"]",
+	])("rejects the %s pathspec glob metacharacter", (metacharacter) => {
+		expect(() =>
+			validateScope({ paths: [`packages/cli/${metacharacter}`] }),
+		).toThrow(
+			"must be a literal repo-relative path: glob patterns are not supported; list directories instead",
+		);
+	});
 });
