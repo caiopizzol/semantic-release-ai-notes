@@ -1,14 +1,20 @@
-import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { GenerateNotesContext, PluginConfig } from "../types.js";
 import { generateFallbackNotes } from "./fallback.js";
+import {
+	filterCommitsByScope,
+	getPackagePath,
+	getRepoRoot,
+	resolveScopeName,
+} from "./git.js";
 import {
 	releaseNotesSchema,
 	renderNotes,
 	validateReleaseNotes,
 } from "./notes-schema.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
+import { validateScope } from "./scope.js";
 
 // Cache the result — semantic-release calls generateNotes twice
 // (before and after @semantic-release/git's version commit)
@@ -19,20 +25,7 @@ export function _resetCache() {
 	cachedNotes = null;
 }
 
-/**
- * Resolve the git repository root. In monorepos, semantic-release's cwd is the
- * package directory, but git diff paths and brand files are relative to the repo root.
- */
-export function getRepoRoot(cwd: string): string {
-	try {
-		return execSync("git rev-parse --show-toplevel", {
-			cwd,
-			encoding: "utf-8",
-		}).trim();
-	} catch {
-		return cwd;
-	}
-}
+export { getRepoRoot } from "./git.js";
 
 export async function generateNotes(
 	pluginConfig: PluginConfig,
@@ -40,12 +33,21 @@ export async function generateNotes(
 ): Promise<string> {
 	const { commits, lastRelease, nextRelease, logger } = context;
 	const cwd = context.cwd || process.cwd();
-	const repoRoot = getRepoRoot(cwd);
+	const validatedScope = validateScope(pluginConfig.scope);
 
 	if (cachedNotes) {
 		logger.log("Returning cached AI release notes.");
 		return cachedNotes;
 	}
+
+	const repoRoot = getRepoRoot(cwd);
+	const scope = validatedScope
+		? resolveScopeName(validatedScope, cwd)
+		: undefined;
+	const packagePath = scope ? getPackagePath(repoRoot, cwd) : undefined;
+	const relevantCommits = scope
+		? filterCommitsByScope(commits, scope.paths, repoRoot)
+		: commits;
 
 	// Read brand/voice file if it exists — resolve from repo root so monorepo
 	// packages can find a root-level brand.md
@@ -60,13 +62,15 @@ export async function generateNotes(
 		// No brand file — that's fine
 	}
 
-	const prompt = buildPrompt(
-		commits,
+	const prompt = buildPrompt({
+		commits: relevantCommits,
 		lastRelease,
 		nextRelease,
 		brandContent,
-		pluginConfig,
-	);
+		style: pluginConfig.style,
+		scope,
+		packagePath,
+	});
 
 	try {
 		// Dynamic import to avoid issues if the SDK isn't available at load time
@@ -119,5 +123,5 @@ export async function generateNotes(
 
 	// Fallback — never block a release
 	logger.log("Falling back to commit-list notes.");
-	return generateFallbackNotes(commits, nextRelease);
+	return generateFallbackNotes(relevantCommits, nextRelease, scope);
 }

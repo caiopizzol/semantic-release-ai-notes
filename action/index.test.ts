@@ -1,13 +1,23 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
 	type ReleaseNotes,
 	releaseNotesSchema,
 	renderNotes,
 } from "../src/lib/notes-schema.js";
+import { buildPrompt, buildScopeGuidance } from "../src/lib/prompt.js";
 import {
+	assertFullHistory,
+	buildActionPrompt,
 	buildClaudeArgs,
+	parseActionScope,
+	parseScopePackagePath,
+	parseScopePaths,
 	renderClaudeStructuredOutput,
 	renderClaudeStructuredOutputOrFallback,
+	resolveActionScopeContext,
 } from "./index.ts";
 
 const structuredNotes: ReleaseNotes = {
@@ -41,6 +51,146 @@ describe("buildClaudeArgs", () => {
 		const schemaArg = args[schemaIndex + 1];
 		if (!schemaArg) throw new Error("Missing --json-schema value");
 		expect(JSON.parse(schemaArg)).toEqual(releaseNotesSchema);
+	});
+});
+
+describe("Action scope inputs", () => {
+	test("splits newline-separated scope paths", () => {
+		expect(
+			parseScopePaths("packages/cli\n packages/core \r\n\nREADME.md"),
+		).toEqual(["packages/cli", "packages/core", "README.md"]);
+	});
+
+	test("parses a literal package path and rejects glob patterns", () => {
+		expect(parseScopePackagePath(" packages\\cli ")).toBe("packages/cli");
+		expect(parseScopePackagePath("")).toBeUndefined();
+		expect(() => parseScopePackagePath("packages/*")).toThrow(
+			"glob patterns are not supported",
+		);
+		expect(() => parseScopePackagePath("packages/*")).toThrow(
+			"scope-package-path",
+		);
+		expect(() => parseScopePackagePath("/abs/path")).not.toThrow(
+			"scope.paths[0]",
+		);
+	});
+
+	test("rejects shallow clones for scoped runs with an actionable message", () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sr-ai-notes-shallow-"));
+		try {
+			const src = path.join(dir, "src");
+			const run = (cwd: string, ...args: string[]) =>
+				Bun.spawnSync(["git", ...args], { cwd });
+			fs.mkdirSync(src);
+			run(src, "init", "-b", "main");
+			run(src, "config", "user.email", "test@example.com");
+			run(src, "config", "user.name", "Test User");
+			fs.writeFileSync(path.join(src, "a.txt"), "a");
+			run(src, "add", ".");
+			run(src, "commit", "-m", "one");
+			fs.writeFileSync(path.join(src, "a.txt"), "b");
+			run(src, "commit", "-am", "two");
+			run(dir, "clone", "--depth", "1", `file://${src}`, "shallow");
+
+			expect(() => assertFullHistory(path.join(dir, "shallow"))).toThrow(
+				"fetch-depth: 0",
+			);
+			expect(() => assertFullHistory(src)).not.toThrow();
+		} finally {
+			fs.rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("prefers scope-package-path for package location and default name", () => {
+		const repoRoot = fs.mkdtempSync(
+			path.join(os.tmpdir(), "sr-ai-notes-action-scope-"),
+		);
+		try {
+			const cwd = path.join(repoRoot, "packages/current");
+			const selected = path.join(repoRoot, "packages/selected");
+			fs.mkdirSync(cwd, { recursive: true });
+			fs.mkdirSync(selected, { recursive: true });
+			fs.writeFileSync(
+				path.join(cwd, "package.json"),
+				'{"name":"@acme/current"}',
+			);
+			fs.writeFileSync(
+				path.join(selected, "package.json"),
+				'{"name":"@acme/selected"}',
+			);
+
+			expect(
+				resolveActionScopeContext({
+					scope: { paths: ["packages/selected"] },
+					scopePackagePath: "packages/selected",
+					repoRoot,
+					cwd,
+				}),
+			).toEqual({
+				scope: {
+					name: "@acme/selected",
+					paths: ["packages/selected"],
+				},
+				packagePath: "packages/selected",
+			});
+
+			expect(
+				resolveActionScopeContext({
+					scope: { name: "Explicit name", paths: ["packages/selected"] },
+					scopePackagePath: "packages/selected",
+					repoRoot,
+					cwd,
+				}).scope?.name,
+			).toBe("Explicit name");
+		} finally {
+			fs.rmSync(repoRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("uses the shared scoped guidance block", () => {
+		const scope = parseActionScope({
+			name: "@superdoc/cli",
+			paths: "packages/cli\npackages/core",
+			audience: "CLI users",
+			instructions: "Ignore internal benchmarks.",
+		});
+		if (!scope) throw new Error("Expected a parsed scope");
+		const guidance = buildScopeGuidance({
+			scope,
+			packagePath: "packages/cli",
+		}).join("\n");
+		const actionPrompt = buildActionPrompt({
+			prevTag: "cli-v1.0.0",
+			curTag: "cli-v1.1.0",
+			commitLog: "- feat(cli): add command (abc1234)",
+			brandContent: "",
+			style: "concise",
+			scope,
+			packagePath: "packages/cli",
+		});
+		const pluginPrompt = buildPrompt({
+			commits: [],
+			lastRelease: {
+				version: "1.0.0",
+				gitTag: "cli-v1.0.0",
+				gitHead: "aaa1111",
+			},
+			nextRelease: {
+				version: "1.1.0",
+				gitTag: "cli-v1.1.0",
+				gitHead: "bbb2222",
+				type: "minor",
+			},
+			brandContent: null,
+			scope,
+			packagePath: "packages/cli",
+		});
+
+		expect(actionPrompt).toContain(guidance);
+		expect(pluginPrompt).toContain(guidance);
+		expect(actionPrompt).toContain(
+			"git diff --stat cli-v1.0.0...cli-v1.1.0 -- packages/cli packages/core",
+		);
 	});
 });
 

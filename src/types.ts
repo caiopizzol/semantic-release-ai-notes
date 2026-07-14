@@ -1,3 +1,14 @@
+export interface ReleaseScope {
+	/** Published package or product name (defaults to package.json at cwd) */
+	name?: string;
+	/** Repository-relative paths relevant to this release */
+	paths: string[];
+	/** Intended reader for these release notes */
+	audience?: string;
+	/** Additional relevance rules appended to the maintained prompt */
+	instructions?: string;
+}
+
 export interface PluginConfig {
 	/** Claude model to use (default: "claude-haiku-4-5") */
 	model?: string;
@@ -7,6 +18,8 @@ export interface PluginConfig {
 	style?: "concise" | "detailed";
 	/** Maximum agent turns to prevent runaway cost (default: 15) */
 	maxTurns?: number;
+	/** Optional package-specific release-note boundary for monorepos */
+	scope?: ReleaseScope;
 }
 
 // Minimal types for semantic-release context — only what we use

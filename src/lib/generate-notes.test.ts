@@ -171,6 +171,44 @@ describe("generateNotes", () => {
 		expect(second).toBe(renderNotes(structuredNotes));
 		expect(callCount).toBe(1); // Agent only called once
 	});
+
+	test("validates scope before invoking the agent", async () => {
+		let called = false;
+		mock.module("@anthropic-ai/claude-agent-sdk", () => ({
+			query: () => {
+				called = true;
+				throw new Error("should not run");
+			},
+		}));
+
+		const { generateNotes } = await import("./generate-notes.js");
+		await expect(
+			generateNotes({ scope: { paths: ["../outside"] } }, makeContext()),
+		).rejects.toThrow("scope.paths[0]");
+		expect(called).toBe(false);
+	});
+
+	test("generates a scoped dependency note when the intersection is empty", async () => {
+		const root = createTempGitRepo();
+		fs.writeFileSync(
+			path.join(root, "package.json"),
+			JSON.stringify({ name: "@superdoc/cli" }),
+		);
+		mock.module("@anthropic-ai/claude-agent-sdk", () => ({
+			query: () => {
+				throw new Error("offline");
+			},
+		}));
+
+		const { generateNotes } = await import("./generate-notes.js");
+		const result = await generateNotes(
+			{ scope: { paths: ["packages/cli"] } },
+			makeContext({ cwd: root }),
+		);
+
+		expect(result).toContain("@superdoc/cli receives dependency updates");
+		expect(result).not.toContain("add cool feature");
+	});
 });
 
 describe("getRepoRoot", () => {
