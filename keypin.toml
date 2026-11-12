@@ -1,5 +1,5 @@
 # This project's keys for keypin (https://github.com/caiopizzol/keypin). Names and places, never values.
-# `bunx keypin@0.10.0 publish ANTHROPIC_API_KEY` writes the release workflow's ANTHROPIC_API_KEY secret.
+# `bunx keypin@0.11.0 publish ANTHROPIC_API_KEY` writes the release workflow's ANTHROPIC_API_KEY secret.
 [1password]
 account = "my.1password.com"
 
